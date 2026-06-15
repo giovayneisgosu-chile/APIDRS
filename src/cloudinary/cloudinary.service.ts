@@ -16,7 +16,7 @@ export class CloudinaryService {
     return new Promise((resolve, reject) => {
       const publicId = nombreArchivo.replace('.pdf', '');
       const stream = cloudinary.uploader.upload_stream(
-        { resource_type: 'raw', folder: carpeta, public_id: publicId },
+        { resource_type: 'auto', format: 'pdf', folder: carpeta, public_id: publicId },
         (error, result) => {
           if (error || !result) return reject(error ?? new Error('Sin resultado de Cloudinary'));
           resolve(result.secure_url);

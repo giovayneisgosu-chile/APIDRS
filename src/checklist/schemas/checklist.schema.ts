@@ -1,10 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type ChecklistDocument = HydratedDocument<Checklist>;
 
 @Schema({ timestamps: true, collection: 'checklists' })
 export class Checklist {
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null }) creadoPor: Types.ObjectId;
+  @Prop({ default: null }) urlPdf: string;
+
   @Prop({ required: true, trim: true })
   nombre: string;
 
