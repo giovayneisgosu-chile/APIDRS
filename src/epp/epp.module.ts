@@ -14,5 +14,6 @@ import { UsersModule } from '../users/users.module';
   ],
   controllers: [EppController],
   providers: [EppService],
+  exports: [EppService],
 })
 export class EppModule {}

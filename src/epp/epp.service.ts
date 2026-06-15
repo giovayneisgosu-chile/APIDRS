@@ -33,6 +33,7 @@ export class EppService {
 
     const url = await this.pdfService.generateEppPdf(
       this.buildDatos(saved.toObject()),
+      entregadoPor.nombre,
       this.buildFileName(saved.toObject()),
     );
     saved.urlPdf = url;
@@ -77,9 +78,11 @@ export class EppService {
     epp.estado = 'firmado';
     epp.fechaFirma = new Date();
 
+    const eppObj = epp.toObject() as any;
     const url = await this.pdfService.generateEppPdf(
-      this.buildDatos(epp.toObject()),
-      this.buildFileName(epp.toObject()),
+      this.buildDatos(eppObj),
+      eppObj.entregadoPor?.nombre ?? 'USUARIO',
+      this.buildFileName(eppObj),
     );
     epp.urlPdf = url;
     return epp.save();
@@ -88,9 +91,11 @@ export class EppService {
   async regenerarPdf(id: string): Promise<Epp> {
     const epp = await this.eppModel.findById(id).exec();
     if (!epp) throw new NotFoundException('EPP no encontrado');
+    const eppObj = epp.toObject() as any;
     const url = await this.pdfService.generateEppPdf(
-      this.buildDatos(epp.toObject()),
-      this.buildFileName(epp.toObject()),
+      this.buildDatos(eppObj),
+      eppObj.entregadoPor?.nombre ?? 'USUARIO',
+      this.buildFileName(eppObj),
     );
     epp.urlPdf = url;
     return epp.save();

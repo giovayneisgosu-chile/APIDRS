@@ -11,7 +11,7 @@ export class EppPdfService {
 
   constructor(private cloudinary: CloudinaryService) {}
 
-  async generateEppPdf(datos: any, fileName = 'entrega_epp.pdf'): Promise<string> {
+  async generateEppPdf(datos: any, userName: string, fileName = 'entrega_epp.pdf'): Promise<string> {
     const empresa = (datos.empresa ?? 'drs').toLowerCase();
     const templateName = empresa === 'fda' ? 'epp-fda.pdf' : 'epp-drs.pdf';
     const templatePath = path.join(this.templatesBase, templateName);
@@ -27,7 +27,10 @@ export class EppPdfService {
       this.rellenarPie(page, datos, font);
 
       const out = await pdfDoc.save();
-      return await this.cloudinary.subirPdf(Buffer.from(out), 'epps', fileName);
+      const nombreCarpeta = userName
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '_').toUpperCase();
+      const carpeta = `EPP/${nombreCarpeta}`;
+      return await this.cloudinary.subirPdf(Buffer.from(out), carpeta, fileName);
     } catch (err) {
       throw new InternalServerErrorException(`Error generando PDF EPP: ${err}`);
     }
