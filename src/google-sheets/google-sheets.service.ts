@@ -68,4 +68,18 @@ export class GoogleSheetsService {
       datos.urlPdf ? `=HYPERLINK("${datos.urlPdf}","Ver PDF")` : '',
     ]]);
   }
+
+  async agregarChecklist(datos: {
+    fecha: string; nombre: string; run: string; patente: string;
+    kilometraje: string; nivelCombustible: string; equipoCritico: string;
+    dispositivosFatiga: string; tieneDocumentacion: string;
+    tieneLicencia: string; verificacionPernos: string;
+  }): Promise<void> {
+    await this.append('CheckList!A:K', [[
+      datos.fecha, datos.nombre, datos.run, datos.patente,
+      datos.kilometraje, datos.nivelCombustible, datos.equipoCritico,
+      datos.dispositivosFatiga, datos.tieneDocumentacion,
+      datos.tieneLicencia, datos.verificacionPernos,
+    ]]);
+  }
 }
