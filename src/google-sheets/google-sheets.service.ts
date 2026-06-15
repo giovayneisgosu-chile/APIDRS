@@ -42,7 +42,7 @@ export class GoogleSheetsService {
     await this.append('EPP!A:H', [[
       datos.fecha, datos.numero, datos.trabajador, datos.rut,
       datos.cargo, datos.empresa, datos.estado,
-      datos.urlPdf ? `=HYPERLINK("${datos.urlPdf}";"Ver PDF")` : '',
+      datos.urlPdf ?? '',
     ]]);
   }
 
@@ -53,8 +53,8 @@ export class GoogleSheetsService {
     await this.append('Difusion!A:H', [[
       datos.fecha, datos.tema, datos.relator, datos.empresa,
       datos.participantes, datos.estado,
-      datos.urlDrs ? `=HYPERLINK("${datos.urlDrs}";"Ver PDF DRS")` : '',
-      datos.urlFda ? `=HYPERLINK("${datos.urlFda}";"Ver PDF FDA")` : '',
+      datos.urlDrs ?? '',
+      datos.urlFda ?? '',
     ]]);
   }
 
@@ -65,7 +65,7 @@ export class GoogleSheetsService {
     await this.append('ART!A:G', [[
       datos.fecha, datos.supervisor, datos.empresa,
       datos.trabajo, datos.lugar, datos.lider,
-      datos.urlPdf ? `=HYPERLINK("${datos.urlPdf}";"Ver PDF")` : '',
+      datos.urlPdf ?? '',
     ]]);
   }
 
