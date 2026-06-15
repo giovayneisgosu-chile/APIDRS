@@ -62,6 +62,7 @@ export class InventarioController {
     const eppDto = {
       trabajador: dto.trabajador,
       fecha: dto.fecha,
+      firma: dto.firma,
       items: dto.items.map(i => ({
         epp: i.epp,
         marca: i.marca ?? '',

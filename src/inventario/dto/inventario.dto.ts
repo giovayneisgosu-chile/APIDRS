@@ -28,4 +28,5 @@ export class DescontarEppDto {
   trabajador: TrabajadorEppSimpleDto;
   fecha: string;
   items: ItemDescontarEppDto[];
+  firma?: string;
 }

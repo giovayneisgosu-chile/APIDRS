@@ -17,4 +17,5 @@ export class CreateEppDto {
   trabajador: TrabajadorEppDto;
   fecha: string;
   items: ItemEppDto[];
+  firma?: string;
 }
