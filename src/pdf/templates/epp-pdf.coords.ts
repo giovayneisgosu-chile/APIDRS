@@ -33,7 +33,7 @@ export const EPP_TABLA = {
 
 export const EPP_PIE = {
   entregadoPor: { x: 243, y: 152, size: 8, maxW: 150 }, // tras "Entregado Por:"
-  rut:          { x: 243, y: 137, size: 8, maxW: 150 }, // tras "RUT:"
-  cargo:        { x: 243, y: 113, size: 8, maxW: 150 }, // tras "CARGO:"
-  firma:        { xc: 486, yc: 135, maxW: 175, maxH: 65 }, // Firma persona trabajadora
+  rut:          { x: 243, y: 141, size: 8, maxW: 150 }, // tras "RUT:" (ajustado sobre línea template)
+  cargo:        { x: 243, y: 116, size: 8, maxW: 150 }, // tras "CARGO:"
+  firma:        { xc: 486, yc: 140, maxW: 165, maxH: 55 }, // Firma persona trabajadora
 };
