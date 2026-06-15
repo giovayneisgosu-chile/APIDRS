@@ -14,7 +14,7 @@ export class Vehiculo {
   @Prop({ type: Number, default: null })
   proximaMantencion: number | null;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   ultimaActualizacion: string | null;
 }
 
