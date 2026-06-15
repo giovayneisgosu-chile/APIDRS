@@ -34,6 +34,11 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
+  @Patch(':id')
+  patch(@Param('id') id: string, @Body() dto: Partial<CreateUserDto>) {
+    return this.usersService.update(id, dto);
+  }
+
   @Patch(':id/signature')
   updateSignature(@Param('id') id: string, @Body() dto: UpdateSignatureDto) {
     return this.usersService.updateSignature(id, dto.signature);
