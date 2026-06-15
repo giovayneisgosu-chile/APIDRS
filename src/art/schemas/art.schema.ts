@@ -124,7 +124,7 @@ export class Art {
   @Prop({ required: true, trim: true })
   liderNombre: string;
 
-  @Prop({ required: true, trim: true })
+  @Prop({ default: '', trim: true })
   liderCargo: string;
 
   @Prop({ required: true, enum: ['si', 'no'] })
