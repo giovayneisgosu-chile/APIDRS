@@ -32,8 +32,11 @@ export class ArtPdfPlantillaService {
       await this.rellenarPaso5(pdfDoc, pag2, art, font);
 
       const out = await pdfDoc.save();
-      const fileName = this.buildArtFileName(art, userName);
-      return await this.cloudinary.subirPdf(Buffer.from(out), 'arts', fileName);
+      const nombreCarpeta = userName
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '_').toUpperCase();
+      const carpeta = `ART/${nombreCarpeta}`;
+      const fileName = this.buildArtFileName(art);
+      return await this.cloudinary.subirPdf(Buffer.from(out), carpeta, fileName);
     } catch (err) {
       throw new InternalServerErrorException(`Error generando PDF: ${err}`);
     }
@@ -245,14 +248,9 @@ export class ArtPdfPlantillaService {
     }
   }
 
-  private buildArtFileName(art: any, userName: string): string {
-    const nombre = userName
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .trim()
-      .replace(/\s+/g, '-');
+  private buildArtFileName(art: any): string {
     const fecha = String(art.fecha).replace(/\//g, '-');
     const num = String(art.numeroDia ?? 1).padStart(3, '0');
-    return `ART_${nombre}_${fecha}_${num}.pdf`;
+    return `${fecha}_${num}.pdf`;
   }
 }

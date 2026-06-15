@@ -49,6 +49,11 @@ export class InventarioController {
     return this.inventarioService.ajustarStock(id, dto);
   }
 
+  @Patch(':id/descontar')
+  descontar(@Param('id') id: string, @Body() dto: AjustarStockDto) {
+    return this.inventarioService.ajustarStock(id, { cantidad: -Math.abs(dto.cantidad) });
+  }
+
   @Roles('admin')
   @UseGuards(RolesGuard)
   @Delete(':id')
