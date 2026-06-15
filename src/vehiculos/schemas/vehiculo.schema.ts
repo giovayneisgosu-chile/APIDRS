@@ -11,7 +11,7 @@ export class Vehiculo {
   @Prop({ default: 0 })
   kilometrajeActual: number;
 
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   proximaMantencion: number | null;
 
   @Prop({ default: null })
