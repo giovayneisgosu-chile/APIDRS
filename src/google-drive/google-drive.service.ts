@@ -32,31 +32,42 @@ export class GoogleDriveService {
     this.drive = google.drive({ version: 'v3', auth });
   }
 
-  private async getOrCreateFolder(name: string): Promise<string> {
-    if (this.folderCache.has(name)) return this.folderCache.get(name)!;
+  private async getOrCreateFolder(carpeta: string): Promise<string> {
+    const partes = carpeta.split('/').filter(Boolean);
+    let parentId = this.rootFolderId;
 
-    const res = await this.drive.files.list({
-      q: `'${this.rootFolderId}' in parents and name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id)',
-    });
+    for (const parte of partes) {
+      const cacheKey = `${parentId}/${parte}`;
+      if (this.folderCache.has(cacheKey)) {
+        parentId = this.folderCache.get(cacheKey)!;
+        continue;
+      }
 
-    if (res.data.files?.length) {
-      const id = res.data.files[0].id;
-      this.folderCache.set(name, id);
-      return id;
+      const res = await this.drive.files.list({
+        q: `'${parentId}' in parents and name='${parte}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id)',
+      });
+
+      if (res.data.files?.length) {
+        const id = res.data.files[0].id;
+        this.folderCache.set(cacheKey, id);
+        parentId = id;
+      } else {
+        const folder = await this.drive.files.create({
+          requestBody: {
+            name: parte,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [parentId],
+          },
+          fields: 'id',
+        });
+        const id = folder.data.id;
+        this.folderCache.set(cacheKey, id);
+        parentId = id;
+      }
     }
 
-    const folder = await this.drive.files.create({
-      requestBody: {
-        name,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [this.rootFolderId],
-      },
-      fields: 'id',
-    });
-    const id = folder.data.id;
-    this.folderCache.set(name, id);
-    return id;
+    return parentId;
   }
 
   async subirArchivo(buffer: Buffer, carpeta: string, nombreArchivo: string, mimeType: string): Promise<string> {

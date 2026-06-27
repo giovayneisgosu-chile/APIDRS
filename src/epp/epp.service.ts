@@ -84,7 +84,7 @@ export class EppService {
     await this.sheets.dbAppend(SHEET, HEADERS, this.serialize(epp));
 
     // Generar PDF en segundo plano
-    this.generarYGuardarPdf(epp).catch(() => null);
+    this.generarYGuardarPdf(epp).catch(err => console.error('[EPP] Error generando PDF:', err));
 
     return epp;
   }
