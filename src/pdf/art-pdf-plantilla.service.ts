@@ -252,6 +252,7 @@ export class ArtPdfPlantillaService {
     const nombre = String(art.liderNombre ?? '')
       .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').toUpperCase();
     const fecha = String(art.fecha).replace(/\//g, '-');
-    return `ART-${nombre}-${fecha}.pdf`;
+    const num = String(art.numeroDia ?? 1).padStart(3, '0');
+    return `ART-${nombre}-${fecha}-${num}.pdf`;
   }
 }

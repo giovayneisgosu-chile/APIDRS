@@ -72,7 +72,8 @@ export class ChecklistService {
       const nombre = String(data.nombre ?? 'conductor')
         .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').toUpperCase();
       const fecha = String(checklist.fecha).replace(/\//g, '-');
-      const fileName = `CHECKLIST-${nombre}-${fecha}.pdf`;
+      const hora = new Date().toTimeString().slice(0, 5).replace(':', '-');
+      const fileName = `CHECKLIST-${nombre}-${fecha}-${hora}.pdf`;
       const urlPdf = await this.drive.subirPdf(pdfBuffer, 'checklists', fileName);
       const updated: ChecklistEntity = { ...checklist, urlPdf };
       await this.sheets.dbUpdate(SHEET, checklist.id, HEADERS, updated);
