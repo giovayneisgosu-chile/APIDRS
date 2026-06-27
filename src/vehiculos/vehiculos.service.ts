@@ -77,7 +77,8 @@ export class VehiculosService {
     if (dto.imagenBase64 && dto.imagenMimeType) {
       const buffer = Buffer.from(dto.imagenBase64, 'base64');
       const ext = dto.imagenMimeType.includes('png') ? 'png' : 'jpg';
-      const fileName = `MANT_${upper}_${dto.fecha.replace(/\//g, '-')}_${dto.numeroFactura}.${ext}`;
+      const fecha = dto.fecha.replace(/\//g, '-');
+      const fileName = `${upper}-MANTENCION-${fecha}.${ext}`;
       imagenUrl = await this.drive.subirArchivo(buffer, `Mantenciones/${upper}`, fileName, dto.imagenMimeType);
     }
 
