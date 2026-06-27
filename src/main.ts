@@ -7,6 +7,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
   app.enableCors();
+  app.use(require('express').json({ limit: '15mb' }));
+  app.use(require('express').urlencoded({ limit: '15mb', extended: true }));
   console.log(`Server started on port http://localhost:${process.env.PORT ?? 3000}`);
   await app.listen(process.env.PORT ?? 3000);
 }
