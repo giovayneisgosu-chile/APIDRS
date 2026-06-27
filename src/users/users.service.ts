@@ -24,12 +24,13 @@ export interface UserEntity {
   signature: string;
   isActive: boolean;
   createdAt: string;
+  especialidad: string;
 }
 
 const SHEET = 'Usuarios';
 const HEADERS = [
   'id', 'name', 'lastName', 'rut', 'email', 'password',
-  'phone', 'rol', 'empresa', 'signature', 'isActive', 'createdAt',
+  'phone', 'rol', 'empresa', 'signature', 'isActive', 'createdAt', 'especialidad',
 ];
 
 @Injectable()
@@ -74,6 +75,7 @@ export class UsersService {
       signature: dto.signature ?? '',
       isActive: true,
       createdAt: new Date().toISOString(),
+      especialidad: (dto as any).especialidad ?? '',
     };
     await this.sheets.dbAppend(SHEET, HEADERS, this.serialize(user));
     return user;

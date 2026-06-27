@@ -13,6 +13,7 @@ import { GoogleDriveModule } from './google-drive/google-drive.module';
 import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 import { VehiculosModule } from './vehiculos/vehiculos.module';
 import { ChecklistModule } from './checklist/checklist.module';
+import { PlanificacionModule } from './planificacion/planificacion.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ChecklistModule } from './checklist/checklist.module';
     GoogleDriveModule,
     VehiculosModule,
     ChecklistModule,
+    PlanificacionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
