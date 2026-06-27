@@ -69,7 +69,10 @@ export class ChecklistService {
     await this.sheets.dbAppend(SHEET, HEADERS, checklist);
 
     if (pdfBuffer) {
-      const fileName = `CheckList_${(data.nombre ?? 'conductor').replace(/\s+/g, '_')}_${checklist.fecha}.pdf`;
+      const nombre = String(data.nombre ?? 'conductor')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').toUpperCase();
+      const fecha = String(checklist.fecha).replace(/\//g, '-');
+      const fileName = `CHECKLIST-${nombre}-${fecha}.pdf`;
       const urlPdf = await this.drive.subirPdf(pdfBuffer, 'checklists', fileName);
       const updated: ChecklistEntity = { ...checklist, urlPdf };
       await this.sheets.dbUpdate(SHEET, checklist.id, HEADERS, updated);

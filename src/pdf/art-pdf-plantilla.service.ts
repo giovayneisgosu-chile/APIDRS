@@ -249,8 +249,9 @@ export class ArtPdfPlantillaService {
   }
 
   private buildArtFileName(art: any): string {
+    const nombre = String(art.liderNombre ?? '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '-').toUpperCase();
     const fecha = String(art.fecha).replace(/\//g, '-');
-    const num = String(art.numeroDia ?? 1).padStart(3, '0');
-    return `${fecha}_${num}.pdf`;
+    return `ART-${nombre}-${fecha}.pdf`;
   }
 }
