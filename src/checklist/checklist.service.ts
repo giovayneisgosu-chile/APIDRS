@@ -10,13 +10,14 @@ export interface ChecklistEntity {
   run: string;
   patente: string;
   empresa: string;
-  data: string; // JSON con todos los campos del formulario
+  kilometraje: string;
+  data: string;
   urlPdf: string;
   createdAt: string;
 }
 
 const SHEET = 'Checklist';
-const HEADERS = ['id', 'creadoPor', 'fecha', 'nombre', 'run', 'patente', 'empresa', 'data', 'urlPdf', 'createdAt'];
+const HEADERS = ['id', 'creadoPor', 'fecha', 'nombre', 'run', 'patente', 'empresa', 'data', 'urlPdf', 'createdAt', 'kilometraje'];
 
 @Injectable()
 export class ChecklistService {
@@ -48,7 +49,9 @@ export class ChecklistService {
     return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
   }
 
-  async create(data: any, pdfBuffer?: Buffer, userId?: string): Promise<any> {
+  async create(rawData: any, pdfBuffer?: Buffer, userId?: string): Promise<any> {
+    // Cuando viene como FormData, los campos llegan como string JSON en rawData.data
+    const data = typeof rawData?.data === 'string' ? JSON.parse(rawData.data) : rawData;
     const checklist: ChecklistEntity = {
       id: this.sheets.generateId(),
       creadoPor: userId ?? '',
@@ -57,6 +60,7 @@ export class ChecklistService {
       run: data.run ?? '',
       patente: (data.patente ?? '').toUpperCase(),
       empresa: data.empresa ?? '',
+      kilometraje: data.kilometraje ?? '',
       data: JSON.stringify(data),
       urlPdf: '',
       createdAt: new Date().toISOString(),

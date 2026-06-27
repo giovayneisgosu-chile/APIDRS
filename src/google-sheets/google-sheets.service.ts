@@ -94,7 +94,7 @@ export class GoogleSheetsService {
   //   EPP           : id, numero, empresa, trabajador, fecha, items, entregadoPor, estado, firma, fechaFirma, urlPdf, createdAt
   //   ART           : id, creadoPor, empresa, fecha, supervisorAsignador, trabajoARealizar, lugarEspecifico, liderNombre, data, urlPdf, numeroDia, createdAt
   //   Difusion      : id, creadoPor, empresa, fecha, temaPrincipal, relator, rutRelator, cargo, tipoActividad, modalidad, asistencia, ubicacion, horaInicio, horaTermino, duracion, hhTotales, firmaRelator, estado, participantes, urlPdfDrs, urlPdfFda, createdAt
-  //   Checklist     : id, creadoPor, fecha, nombre, run, patente, empresa, data, urlPdf, createdAt
+  //   Checklist     : id, creadoPor, fecha, nombre, run, patente, empresa, data, urlPdf, createdAt, kilometraje
 
   async dbGetAll(sheetName: string): Promise<Record<string, string>[]> {
     const { headers, rows } = await this.getRawRows(sheetName);
@@ -123,9 +123,23 @@ export class GoogleSheetsService {
     });
   }
 
+  private async syncHeaders(sheetName: string, headers: string[]): Promise<void> {
+    const { headers: current } = await this.getRawRows(sheetName);
+    if (current.length >= headers.length) return;
+    // Solo agrega columnas nuevas al final — nunca reordena
+    const lastCol = String.fromCharCode(65 + headers.length - 1);
+    await this.sheets.spreadsheets.values.update({
+      spreadsheetId: this.spreadsheetId,
+      range: `${sheetName}!A1:${lastCol}1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers] },
+    });
+  }
+
   async dbAppend(sheetName: string, headers: string[], data: Record<string, any>): Promise<void> {
     if (!this.sheets) return;
     await this.ensureSheet(sheetName, headers);
+    await this.syncHeaders(sheetName, headers);
     const row = this.toRow(headers, data);
     await this.sheets.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
