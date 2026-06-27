@@ -9,9 +9,18 @@ export class GoogleSheetsService {
   private spreadsheetId: string;
   private sheetIdCache = new Map<string, number>();
 
+  private static normalizePem(pem: string): string {
+    const match = pem.match(/-----BEGIN ([A-Z ]+)-----\s*([\s\S]+?)\s*-----END ([A-Z ]+)-----/);
+    if (!match) return pem;
+    const body = match[2].replace(/\s+/g, '');
+    const wrapped = body.match(/.{1,64}/g)!.join('\n');
+    return `-----BEGIN ${match[1]}-----\n${wrapped}\n-----END ${match[3]}-----\n`;
+  }
+
   constructor(private config: ConfigService) {
     const clientEmail = config.get<string>('GOOGLE_CLIENT_EMAIL');
-    const privateKey = config.get<string>('GOOGLE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+    const rawKey = config.get<string>('GOOGLE_PRIVATE_KEY')?.replace(/\\n/g, '\n') ?? '';
+    const privateKey = rawKey ? GoogleSheetsService.normalizePem(rawKey) : undefined;
     this.spreadsheetId = config.get<string>('GOOGLE_SHEETS_ID') ?? '';
 
     if (!clientEmail || !privateKey) return;
