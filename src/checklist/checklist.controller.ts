@@ -14,7 +14,7 @@ export class ChecklistController {
   create(
     @Body() body: any,
     @CurrentUser() user: any,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string },
   ) {
     return this.checklistService.create(body, file?.buffer, user.userId);
   }

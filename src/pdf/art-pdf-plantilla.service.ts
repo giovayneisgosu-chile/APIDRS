@@ -6,7 +6,7 @@ import {
   COLORES, PASO1, TRANSVERSALES, RIESGOS, PASO3, PASO4, PASO5,
 } from './templates/art-pdf.coords';
 import { RIESGOS_CODELCO } from '../art/constants/riesgos-codelco.constant';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { GoogleDriveService } from '../google-drive/google-drive.service';
 
 @Injectable()
 export class ArtPdfPlantillaService {
@@ -14,7 +14,7 @@ export class ArtPdfPlantillaService {
     process.cwd(), 'src', 'pdf', 'templates', 'formato.pdf',
   );
 
-  constructor(private cloudinary: CloudinaryService) {}
+  constructor(private drive: GoogleDriveService) {}
 
   async generateArtPdf(art: any, userName: string): Promise<string> {
     try {
@@ -36,7 +36,7 @@ export class ArtPdfPlantillaService {
         .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '_').toUpperCase();
       const carpeta = `ART/${nombreCarpeta}`;
       const fileName = this.buildArtFileName(art);
-      return await this.cloudinary.subirPdf(Buffer.from(out), carpeta, fileName);
+      return await this.drive.subirPdf(Buffer.from(out), carpeta, fileName);
     } catch (err) {
       throw new InternalServerErrorException(`Error generando PDF: ${err}`);
     }

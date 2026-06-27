@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { Vehiculo, VehiculoSchema } from './schemas/vehiculo.schema';
 import { VehiculosService } from './vehiculos.service';
 import { VehiculosController } from './vehiculos.controller';
+import { GoogleDriveModule } from '../google-drive/google-drive.module';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Vehiculo.name, schema: VehiculoSchema }])],
+  imports: [GoogleDriveModule],
   controllers: [VehiculosController],
   providers: [VehiculosService],
 })

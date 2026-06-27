@@ -1,35 +1,64 @@
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Product, ProductDocument } from './schemas/product.schema';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { CreateProductDto } from './dto/create-product.dto';
+
+export interface ProductEntity {
+  id: string;
+  nombre: string;
+  categoria: string;
+  talla: string;
+  stock: number;
+}
+
+const SHEET = 'Productos';
+const HEADERS = ['id', 'nombre', 'categoria', 'talla', 'stock'];
 
 @Injectable()
 export class ProductsService {
-  constructor(
-    @InjectModel(Product.name) private productModel: Model<ProductDocument>,
-  ) {}
+  constructor(private sheets: GoogleSheetsService) {}
 
-  async create(dto: CreateProductDto): Promise<ProductDocument> {
-    return this.productModel.create(dto);
+  private parse(row: Record<string, string>): ProductEntity {
+    return { ...row, stock: Number(row.stock) || 0 } as unknown as ProductEntity;
   }
 
-  async findAll(): Promise<ProductDocument[]> {
-    return this.productModel.find().exec();
+  private async getAll(): Promise<ProductEntity[]> {
+    return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
   }
 
-  async findOne(id: string): Promise<ProductDocument | null> {
-    return this.productModel.findById(id).exec();
+  async create(dto: CreateProductDto): Promise<ProductEntity> {
+    const product: ProductEntity = {
+      id: this.sheets.generateId(),
+      nombre: dto.nombre,
+      categoria: dto.categoria,
+      talla: dto.talla ?? '',
+      stock: dto.stock ?? 0,
+    };
+    await this.sheets.dbAppend(SHEET, HEADERS, product);
+    return product;
   }
 
-  async update(
-    id: string,
-    dto: Partial<CreateProductDto>,
-  ): Promise<ProductDocument | null> {
-    return this.productModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+  async findAll(): Promise<ProductEntity[]> {
+    return this.getAll();
   }
 
-  async remove(id: string): Promise<ProductDocument | null> {
-    return this.productModel.findByIdAndDelete(id).exec();
+  async findOne(id: string): Promise<ProductEntity | null> {
+    const all = await this.getAll();
+    return all.find(p => p.id === id) ?? null;
+  }
+
+  async update(id: string, dto: Partial<CreateProductDto>): Promise<ProductEntity | null> {
+    const all = await this.getAll();
+    const current = all.find(p => p.id === id);
+    if (!current) throw new NotFoundException('Producto no encontrado');
+    const updated: ProductEntity = { ...current, ...(dto as any), id };
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, updated);
+    return updated;
+  }
+
+  async remove(id: string): Promise<{ message: string }> {
+    const all = await this.getAll();
+    if (!all.find(p => p.id === id)) throw new NotFoundException('Producto no encontrado');
+    await this.sheets.dbDelete(SHEET, id);
+    return { message: 'Producto eliminado' };
   }
 }

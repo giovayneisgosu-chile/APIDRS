@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ProductsModule } from './products/products.module';
@@ -10,7 +9,7 @@ import { ArtModule } from './art/art.module';
 import { DifusionModule } from './difusion/difusion.module';
 import { EppModule } from './epp/epp.module';
 import { InventarioModule } from './inventario/inventario.module';
-import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { GoogleDriveModule } from './google-drive/google-drive.module';
 import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 import { VehiculosModule } from './vehiculos/vehiculos.module';
 import { ChecklistModule } from './checklist/checklist.module';
@@ -18,13 +17,7 @@ import { ChecklistModule } from './checklist/checklist.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGODB_URI'),
-      }),
-      inject: [ConfigService],
-    }),
+    GoogleSheetsModule,
     ProductsModule,
     UsersModule,
     AuthModule,
@@ -32,8 +25,7 @@ import { ChecklistModule } from './checklist/checklist.module';
     DifusionModule,
     EppModule,
     InventarioModule,
-    CloudinaryModule,
-    GoogleSheetsModule,
+    GoogleDriveModule,
     VehiculosModule,
     ChecklistModule,
   ],

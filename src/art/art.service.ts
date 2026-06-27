@@ -1,63 +1,131 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Art, ArtDocument } from './schemas/art.schema';
-import { CreateArtDto } from './dto/create-art.dto';
+import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { ArtPdfPlantillaService } from '../pdf/art-pdf-plantilla.service';
 import { UsersService } from '../users/users.service';
-import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
+import { CreateArtDto } from './dto/create-art.dto';
+
+export interface ArtEntity {
+  id: string;
+  creadoPor: string;
+  empresa: string;
+  fecha: string;
+  supervisorAsignador: string;
+  trabajoARealizar: string;
+  lugarEspecifico: string;
+  liderNombre: string;
+  data: string; // JSON con el resto de los campos del DTO
+  urlPdf: string;
+  numeroDia: number;
+  createdAt: string;
+}
+
+const SHEET = 'ART';
+const HEADERS = [
+  'id', 'creadoPor', 'empresa', 'fecha',
+  'supervisorAsignador', 'trabajoARealizar', 'lugarEspecifico', 'liderNombre',
+  'data', 'urlPdf', 'numeroDia', 'createdAt',
+];
 
 @Injectable()
 export class ArtService {
   constructor(
-    @InjectModel(Art.name) private artModel: Model<ArtDocument>,
+    private sheets: GoogleSheetsService,
     private pdfService: ArtPdfPlantillaService,
     private usersService: UsersService,
-    private sheetsService: GoogleSheetsService,
   ) {}
 
-  async create(dto: CreateArtDto, userId: string): Promise<ArtDocument> {
-    const numeroDia = await this.contarArtsDia(userId, dto.fecha);
+  private parse(row: Record<string, string>): ArtEntity {
+    return { ...row, numeroDia: Number(row.numeroDia) || 1 } as unknown as ArtEntity;
+  }
+
+  private serialize(a: ArtEntity): Record<string, any> {
+    return { ...a };
+  }
+
+  private async getAll(): Promise<ArtEntity[]> {
+    return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
+  }
+
+  private expand(art: ArtEntity, creadoPor?: any): any {
+    const data = this.tryParse(art.data);
+    return {
+      id: art.id, _id: art.id,
+      creadoPor: creadoPor ?? art.creadoPor,
+      empresa: art.empresa,
+      fecha: art.fecha,
+      supervisorAsignador: art.supervisorAsignador,
+      trabajoARealizar: art.trabajoARealizar,
+      lugarEspecifico: art.lugarEspecifico,
+      liderNombre: art.liderNombre,
+      urlPdf: art.urlPdf,
+      numeroDia: art.numeroDia,
+      createdAt: art.createdAt,
+      ...data,
+    };
+  }
+
+  private tryParse(val: string, fallback: any = {}): any {
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+
+  private async populateUser(userId: string): Promise<any> {
+    try {
+      const u = await this.usersService.findOne(userId);
+      return { id: u.id, name: u.name, lastName: u.lastName, email: u.email };
+    } catch { return { id: userId }; }
+  }
+
+  async create(dto: CreateArtDto, userId: string): Promise<any> {
+    const all = await this.getAll();
+    const numeroDia = all.filter(a => a.creadoPor === userId && a.fecha === dto.fecha).length + 1;
 
     const otrosRiesgos = (dto.otrosRiesgos ?? []).map(({ riesgo, medidaControl }) => ({ riesgo, medidaControl }));
     const participantes = (dto.participantes ?? []).map(({ nombre, cargo, enCondiciones, firma }) => ({ nombre, cargo, enCondiciones, firma }));
 
-    const art = await this.artModel.create({
-      ...dto,
-      otrosRiesgos,
-      participantes,
-      creadoPor: new Types.ObjectId(userId),
+    const art: ArtEntity = {
+      id: this.sheets.generateId(),
+      creadoPor: userId,
+      empresa: dto.empresa ?? '',
+      fecha: dto.fecha ?? '',
+      supervisorAsignador: dto.supervisorAsignador ?? '',
+      trabajoARealizar: dto.trabajoARealizar ?? '',
+      lugarEspecifico: dto.lugarEspecifico ?? '',
+      liderNombre: dto.liderNombre ?? '',
+      data: JSON.stringify({ ...dto, otrosRiesgos, participantes }),
+      urlPdf: '',
       numeroDia,
-    });
+      createdAt: new Date().toISOString(),
+    };
 
-    // Generar PDF en segundo plano sin bloquear la respuesta
-    this.generarYGuardarPdf(art, userId).catch(() => null);
+    await this.sheets.dbAppend(SHEET, HEADERS, this.serialize(art));
 
-    return art;
+    try {
+      await this.generarYGuardarPdf(art, userId);
+      const updated = await this.getById(art.id);
+      return this.expand(updated);
+    } catch {
+      return this.expand(art);
+    }
   }
 
-  private async generarYGuardarPdf(art: ArtDocument, userId: string): Promise<void> {
-    const usuario = await this.usersService.findOne(userId);
+  private async generarYGuardarPdf(art: ArtEntity, userId: string): Promise<void> {
+    const usuario = await this.usersService.findOne(userId).catch(() => null);
     if (!usuario) return;
     const userName = `${usuario.name} ${usuario.lastName}`;
-    const urlPdf = await this.pdfService.generateArtPdf(art.toObject(), userName);
-    await this.artModel.findByIdAndUpdate(art._id, { urlPdf });
-    const a = art.toObject() as any;
-    this.sheetsService.agregarArt({
-      fecha: a.fecha ?? '', supervisor: a.supervisorAsignador ?? '',
-      empresa: a.empresa ?? '', trabajo: a.trabajoARealizar ?? '',
-      lugar: a.lugarEspecifico ?? '', lider: a.liderNombre ?? '',
-      urlPdf,
-    }).catch(() => null);
+    const expanded = this.expand(art);
+    const urlPdf = await this.pdfService.generateArtPdf(expanded, userName);
+    const updated: ArtEntity = { ...art, urlPdf };
+    await this.sheets.dbUpdate(SHEET, art.id, HEADERS, this.serialize(updated));
   }
 
   async regenerarPdf(id: string, userId: string): Promise<{ urlPdf: string }> {
-    const art = await this.findOne(id);
+    const art = await this.getById(id);
     const usuario = await this.usersService.findOne(userId);
-    if (!usuario) throw new NotFoundException('Usuario no encontrado');
     const userName = `${usuario.name} ${usuario.lastName}`;
-    const urlPdf = await this.pdfService.generateArtPdf(art.toObject(), userName);
-    await this.artModel.findByIdAndUpdate(id, { urlPdf });
+    const expanded = this.expand(art);
+    const urlPdf = await this.pdfService.generateArtPdf(expanded, userName);
+    const updated: ArtEntity = { ...art, urlPdf };
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, this.serialize(updated));
     return { urlPdf };
   }
 
@@ -67,58 +135,75 @@ export class ArtService {
     fechaHasta?: string;
     empresa?: string;
     superintendencia?: string;
-  }): Promise<ArtDocument[]> {
-    const query: any = {};
-    if (filters.userId) query.creadoPor = new Types.ObjectId(filters.userId);
-    if (filters.empresa) query.empresa = new RegExp(filters.empresa, 'i');
-    if (filters.superintendencia) query.superintendencia = new RegExp(filters.superintendencia, 'i');
-    if (filters.fechaDesde || filters.fechaHasta) {
-      query.fecha = {};
-      if (filters.fechaDesde) query.fecha.$gte = filters.fechaDesde;
-      if (filters.fechaHasta) query.fecha.$lte = filters.fechaHasta;
+  }): Promise<any[]> {
+    let all = await this.getAll();
+    if (filters.userId) all = all.filter(a => a.creadoPor === filters.userId);
+    if (filters.empresa) all = all.filter(a => a.empresa.toLowerCase().includes(filters.empresa!.toLowerCase()));
+    if (filters.fechaDesde) all = all.filter(a => a.fecha >= filters.fechaDesde!);
+    if (filters.fechaHasta) all = all.filter(a => a.fecha <= filters.fechaHasta!);
+    if (filters.superintendencia) {
+      all = all.filter(a => {
+        const data = this.tryParse(a.data);
+        return (data.superintendencia ?? '').toLowerCase().includes(filters.superintendencia!.toLowerCase());
+      });
     }
-    return this.artModel.find(query).populate('creadoPor', 'name lastName email').sort({ createdAt: -1 }).exec();
+
+    all = all.sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+
+    return Promise.all(all.map(async a => {
+      const user = await this.populateUser(a.creadoPor);
+      return this.expand(a, user);
+    }));
   }
 
-  async findOne(id: string): Promise<ArtDocument> {
-    const art = await this.artModel.findById(id).populate('creadoPor', 'name lastName email').exec();
-    if (!art) throw new NotFoundException('ART no encontrada');
-    return art;
+  async findOne(id: string): Promise<any> {
+    const art = await this.getById(id);
+    const user = await this.populateUser(art.creadoPor);
+    return this.expand(art, user);
   }
 
-  async getStats(filters: { fechaDesde?: string; fechaHasta?: string }) {
-    const match: any = {};
-    if (filters.fechaDesde) match.fecha = { ...match.fecha, $gte: filters.fechaDesde };
-    if (filters.fechaHasta) match.fecha = { ...match.fecha, $lte: filters.fechaHasta };
+  async getStats(filters: { fechaDesde?: string; fechaHasta?: string }): Promise<any> {
+    let all = await this.getAll();
+    if (filters.fechaDesde) all = all.filter(a => a.fecha >= filters.fechaDesde!);
+    if (filters.fechaHasta) all = all.filter(a => a.fecha <= filters.fechaHasta!);
 
-    const [porUsuario, porEmpresa, total] = await Promise.all([
-      this.artModel.aggregate([
-        { $match: match },
-        { $group: { _id: '$creadoPor', total: { $sum: 1 }, ultima: { $max: '$fecha' } } },
-        { $lookup: { from: 'usuarios', localField: '_id', foreignField: '_id', as: 'usuario' } },
-        { $unwind: '$usuario' },
-        { $project: { nombre: { $concat: ['$usuario.name', ' ', '$usuario.lastName'] }, email: '$usuario.email', total: 1, ultima: 1 } },
-        { $sort: { total: -1 } },
-      ]),
-      this.artModel.aggregate([
-        { $match: match },
-        { $group: { _id: '$empresa', total: { $sum: 1 } } },
-        { $sort: { total: -1 } },
-      ]),
-      this.artModel.countDocuments(match),
-    ]);
+    const total = all.length;
+
+    // Agrupar por usuario
+    const byUser = new Map<string, { total: number; ultima: string }>();
+    for (const a of all) {
+      const prev = byUser.get(a.creadoPor);
+      if (prev) { prev.total++; if (a.fecha > prev.ultima) prev.ultima = a.fecha; }
+      else byUser.set(a.creadoPor, { total: 1, ultima: a.fecha });
+    }
+    const porUsuario = await Promise.all(
+      [...byUser.entries()].map(async ([uid, s]) => {
+        const u = await this.populateUser(uid);
+        return { nombre: u.name ? `${u.name} ${u.lastName}` : uid, email: u.email ?? '', ...s };
+      }),
+    );
+    porUsuario.sort((a, b) => b.total - a.total);
+
+    // Agrupar por empresa
+    const byEmpresa = new Map<string, number>();
+    for (const a of all) byEmpresa.set(a.empresa, (byEmpresa.get(a.empresa) ?? 0) + 1);
+    const porEmpresa = [...byEmpresa.entries()]
+      .map(([_id, total]) => ({ _id, total }))
+      .sort((a, b) => b.total - a.total);
 
     return { total, porUsuario, porEmpresa };
   }
 
-  async remove(id: string): Promise<ArtDocument | null> {
-    const art = await this.artModel.findById(id);
-    if (!art) throw new NotFoundException('ART no encontrada');
-    return this.artModel.findByIdAndDelete(id).exec();
+  async remove(id: string): Promise<{ message: string }> {
+    await this.getById(id);
+    await this.sheets.dbDelete(SHEET, id);
+    return { message: 'ART eliminada' };
   }
 
-  private async contarArtsDia(userId: string, fecha: string): Promise<number> {
-    const count = await this.artModel.countDocuments({ creadoPor: new Types.ObjectId(userId), fecha });
-    return count + 1;
+  private async getById(id: string): Promise<ArtEntity> {
+    const all = await this.getAll();
+    const art = all.find(a => a.id === id);
+    if (!art) throw new NotFoundException('ART no encontrada');
+    return art;
   }
 }

@@ -1,4 +1,4 @@
-import { UserRole } from '../schemas/user.schema';
+import { UserRole } from '../users.service';
 
 export class CreateUserDto {
   readonly name: string;

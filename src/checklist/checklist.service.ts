@@ -1,55 +1,105 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Checklist, ChecklistDocument } from './schemas/checklist.schema';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
+import { GoogleDriveService } from '../google-drive/google-drive.service';
+
+export interface ChecklistEntity {
+  id: string;
+  creadoPor: string;
+  fecha: string;
+  nombre: string;
+  run: string;
+  patente: string;
+  empresa: string;
+  data: string; // JSON con todos los campos del formulario
+  urlPdf: string;
+  createdAt: string;
+}
+
+const SHEET = 'Checklist';
+const HEADERS = ['id', 'creadoPor', 'fecha', 'nombre', 'run', 'patente', 'empresa', 'data', 'urlPdf', 'createdAt'];
 
 @Injectable()
 export class ChecklistService {
   constructor(
-    @InjectModel(Checklist.name) private checklistModel: Model<ChecklistDocument>,
-    private cloudinary: CloudinaryService,
-    private sheetsService: GoogleSheetsService,
+    private sheets: GoogleSheetsService,
+    private drive: GoogleDriveService,
   ) {}
 
-  async create(data: any, pdfBuffer?: Buffer, userId?: string): Promise<ChecklistDocument> {
-    const checklist = await this.checklistModel.create({
+  private tryParse(val: string, fallback: any = {}): any {
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+
+  private parse(row: Record<string, string>): ChecklistEntity {
+    return { ...row } as unknown as ChecklistEntity;
+  }
+
+  private expand(c: ChecklistEntity, creadoPor?: any): any {
+    const data = this.tryParse(c.data);
+    return {
+      id: c.id, _id: c.id,
+      creadoPor: creadoPor ?? c.creadoPor,
+      urlPdf: c.urlPdf,
+      createdAt: c.createdAt,
       ...data,
-      creadoPor: userId ? new Types.ObjectId(userId) : null,
-    });
+    };
+  }
+
+  private async getAll(): Promise<ChecklistEntity[]> {
+    return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
+  }
+
+  async create(data: any, pdfBuffer?: Buffer, userId?: string): Promise<any> {
+    const checklist: ChecklistEntity = {
+      id: this.sheets.generateId(),
+      creadoPor: userId ?? '',
+      fecha: data.fecha ?? new Date().toLocaleDateString('es-CL'),
+      nombre: data.nombre ?? '',
+      run: data.run ?? '',
+      patente: (data.patente ?? '').toUpperCase(),
+      empresa: data.empresa ?? '',
+      data: JSON.stringify(data),
+      urlPdf: '',
+      createdAt: new Date().toISOString(),
+    };
+
+    await this.sheets.dbAppend(SHEET, HEADERS, checklist);
 
     if (pdfBuffer) {
-      const fecha = data.fecha ?? new Date().toLocaleDateString('es-CL');
-      const nombre = (data.nombre ?? 'conductor').replace(/\s+/g, '_');
-      const fileName = `CheckList_${nombre}_${fecha}.pdf`;
-      const urlPdf = await this.cloudinary.subirPdf(pdfBuffer, 'checklists', fileName);
-      checklist.urlPdf = urlPdf;
-      await checklist.save();
-
-      this.sheetsService.agregarChecklist({
-        fecha, conductor: data.nombre ?? '', run: data.run ?? '',
-        patente: data.patente ?? '', empresa: data.empresa ?? '', urlPdf,
-      }).catch(() => null);
+      const fileName = `CheckList_${(data.nombre ?? 'conductor').replace(/\s+/g, '_')}_${checklist.fecha}.pdf`;
+      const urlPdf = await this.drive.subirPdf(pdfBuffer, 'checklists', fileName);
+      const updated: ChecklistEntity = { ...checklist, urlPdf };
+      await this.sheets.dbUpdate(SHEET, checklist.id, HEADERS, updated);
+      return this.expand(updated);
     }
 
-    return checklist;
+    return this.expand(checklist);
   }
 
-  async findAll(): Promise<ChecklistDocument[]> {
-    return this.checklistModel.find().populate('creadoPor', 'name lastName email').sort({ createdAt: -1 }).exec();
+  async findAll(): Promise<any[]> {
+    const all = await this.getAll();
+    return all
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+      .map(c => this.expand(c));
   }
 
-  async findByPatente(patente: string): Promise<ChecklistDocument[]> {
-    return this.checklistModel.find({ patente: patente.toUpperCase() }).sort({ createdAt: -1 }).exec();
+  async findByPatente(patente: string): Promise<any[]> {
+    const all = await this.getAll();
+    return all
+      .filter(c => c.patente === patente.toUpperCase())
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+      .map(c => this.expand(c));
   }
 
-  async findByUsuario(userId: string): Promise<ChecklistDocument[]> {
-    return this.checklistModel.find({ creadoPor: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).exec();
+  async findByUsuario(userId: string): Promise<any[]> {
+    const all = await this.getAll();
+    return all
+      .filter(c => c.creadoPor === userId)
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+      .map(c => this.expand(c));
   }
 
   async contarPorUsuario(userId: string): Promise<{ total: number }> {
-    const total = await this.checklistModel.countDocuments({ creadoPor: new Types.ObjectId(userId) });
-    return { total };
+    const all = await this.getAll();
+    return { total: all.filter(c => c.creadoPor === userId).length };
   }
 }

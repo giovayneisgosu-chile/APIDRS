@@ -1,59 +1,84 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Inventario, InventarioDocument } from './schemas/inventario.schema';
+import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { CreateInventarioDto, AjustarStockDto } from './dto/inventario.dto';
+
+export interface InventarioEntity {
+  id: string;
+  categoria: string;
+  producto: string;
+  talla: string;
+  stock: number;
+}
+
+const SHEET = 'Inventario';
+const HEADERS = ['id', 'categoria', 'producto', 'talla', 'stock'];
 
 @Injectable()
 export class InventarioService {
-  constructor(
-    @InjectModel(Inventario.name) private inventarioModel: Model<InventarioDocument>,
-  ) {}
+  constructor(private sheets: GoogleSheetsService) {}
 
-  async create(dto: CreateInventarioDto): Promise<Inventario> {
-    return this.inventarioModel.create({
-      ...dto,
-      talla: dto.talla || null,
-    });
+  private parse(row: Record<string, string>): InventarioEntity {
+    return { ...row, stock: Number(row.stock) || 0 } as unknown as InventarioEntity;
   }
 
-  async findAll(categoria?: string, producto?: string): Promise<Inventario[]> {
-    const filtro: any = {};
-    if (categoria) filtro.categoria = { $regex: categoria, $options: 'i' };
-    if (producto)  filtro.producto  = { $regex: producto,  $options: 'i' };
-    return this.inventarioModel.find(filtro).sort({ categoria: 1, producto: 1, talla: 1 }).exec();
+  private async getAll(): Promise<InventarioEntity[]> {
+    return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
+  }
+
+  async create(dto: CreateInventarioDto): Promise<InventarioEntity> {
+    const item: InventarioEntity = {
+      id: this.sheets.generateId(),
+      categoria: dto.categoria,
+      producto: dto.producto,
+      talla: dto.talla ?? '',
+      stock: dto.stock ?? 0,
+    };
+    await this.sheets.dbAppend(SHEET, HEADERS, item);
+    return item;
+  }
+
+  async findAll(categoria?: string, producto?: string): Promise<InventarioEntity[]> {
+    let all = await this.getAll();
+    if (categoria) all = all.filter(i => i.categoria.toLowerCase().includes(categoria.toLowerCase()));
+    if (producto)  all = all.filter(i => i.producto.toLowerCase().includes(producto.toLowerCase()));
+    return all.sort((a, b) =>
+      a.categoria.localeCompare(b.categoria) ||
+      a.producto.localeCompare(b.producto) ||
+      (a.talla ?? '').localeCompare(b.talla ?? ''),
+    );
   }
 
   async findCategorias(): Promise<string[]> {
-    return this.inventarioModel.distinct('categoria').exec();
+    const all = await this.getAll();
+    return [...new Set(all.map(i => i.categoria))].sort();
   }
 
-  async findOne(id: string): Promise<Inventario> {
-    const item = await this.inventarioModel.findById(id).exec();
+  async findOne(id: string): Promise<InventarioEntity> {
+    const all = await this.getAll();
+    const item = all.find(i => i.id === id);
     if (!item) throw new NotFoundException('Producto no encontrado');
     return item;
   }
 
-  async update(id: string, dto: Partial<CreateInventarioDto>): Promise<Inventario> {
-    const item = await this.inventarioModel
-      .findByIdAndUpdate(id, dto, { new: true })
-      .exec();
-    if (!item) throw new NotFoundException('Producto no encontrado');
-    return item;
+  async update(id: string, dto: Partial<CreateInventarioDto>): Promise<InventarioEntity> {
+    const current = await this.findOne(id);
+    const updated: InventarioEntity = { ...current, ...(dto as any), id };
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, updated);
+    return updated;
   }
 
-  async ajustarStock(id: string, dto: AjustarStockDto): Promise<Inventario> {
-    const item = await this.inventarioModel.findById(id).exec();
-    if (!item) throw new NotFoundException('Producto no encontrado');
-    const nuevoStock = item.stock + dto.cantidad;
+  async ajustarStock(id: string, dto: AjustarStockDto): Promise<InventarioEntity> {
+    const current = await this.findOne(id);
+    const nuevoStock = current.stock + dto.cantidad;
     if (nuevoStock < 0) throw new BadRequestException('Stock insuficiente');
-    item.stock = nuevoStock;
-    return item.save();
+    const updated: InventarioEntity = { ...current, stock: nuevoStock };
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, updated);
+    return updated;
   }
 
   async remove(id: string): Promise<{ message: string }> {
-    const result = await this.inventarioModel.findByIdAndDelete(id).exec();
-    if (!result) throw new NotFoundException('Producto no encontrado');
+    await this.findOne(id);
+    await this.sheets.dbDelete(SHEET, id);
     return { message: 'Producto eliminado' };
   }
 }

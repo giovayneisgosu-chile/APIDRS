@@ -3,7 +3,7 @@ import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DATOS, TEMA, PARTICIPANTES, FOOTER } from './templates/difusion-pdf.coords';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { GoogleDriveService } from '../google-drive/google-drive.service';
 
 const TEAL = rgb(0, 155 / 255, 158 / 255);
 const NEGRO = rgb(0, 0, 0);
@@ -13,7 +13,7 @@ const POR_PAGINA = 15;
 export class DifusionPdfService {
   private readonly templatesBase = path.join(process.cwd(), 'src', 'pdf', 'templates');
 
-  constructor(private cloudinary: CloudinaryService) {}
+  constructor(private drive: GoogleDriveService) {}
 
   async generarPdfs(difusion: any): Promise<{ urlDrs?: string; urlFda?: string }> {
     const result: { urlDrs?: string; urlFda?: string } = {};
@@ -63,7 +63,7 @@ export class DifusionPdfService {
       }
 
       const out = await pdfDoc.save();
-      return await this.cloudinary.subirPdf(Buffer.from(out), 'difusiones', fileName);
+      return await this.drive.subirPdf(Buffer.from(out), 'difusiones', fileName);
     } catch (err) {
       throw new InternalServerErrorException(`Error generando PDF difusión: ${err}`);
     }

@@ -3,13 +3,13 @@ import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
 import * as fs from 'fs';
 import * as path from 'path';
 import { EPP_CABECERA, EPP_TABLA, EPP_PIE } from './templates/epp-pdf.coords';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { GoogleDriveService } from '../google-drive/google-drive.service';
 
 @Injectable()
 export class EppPdfService {
   private readonly templatesBase = path.join(process.cwd(), 'src', 'pdf', 'templates');
 
-  constructor(private cloudinary: CloudinaryService) {}
+  constructor(private drive: GoogleDriveService) {}
 
   async generateEppPdf(datos: any, userName: string, fileName = 'entrega_epp.pdf'): Promise<string> {
     const empresa = (datos.empresa ?? 'drs').toLowerCase();
@@ -30,7 +30,7 @@ export class EppPdfService {
       const nombreCarpeta = userName
         .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/\s+/g, '_').toUpperCase();
       const carpeta = `EPP/${nombreCarpeta}`;
-      return await this.cloudinary.subirPdf(Buffer.from(out), carpeta, fileName);
+      return await this.drive.subirPdf(Buffer.from(out), carpeta, fileName);
     } catch (err) {
       throw new InternalServerErrorException(`Error generando PDF EPP: ${err}`);
     }

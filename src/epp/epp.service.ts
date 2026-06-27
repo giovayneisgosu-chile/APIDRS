@@ -1,115 +1,168 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Epp, EppDocument } from './schemas/epp.schema';
-import { CreateEppDto } from './dto/create-epp.dto';
+import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { EppPdfService } from '../pdf/epp-pdf.service';
 import { UsersService } from '../users/users.service';
-import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
+import { CreateEppDto } from './dto/create-epp.dto';
+
+export interface EppEntity {
+  id: string;
+  numero: number;
+  empresa: string;
+  trabajador: { nombre: string; rut: string; cargo: string; usuarioId: string };
+  fecha: string;
+  items: { epp: string; marca: string; cant: number; talla: string; fecha: string }[];
+  entregadoPor: { nombre: string; rut: string; rol: string };
+  estado: string;
+  firma: string;
+  fechaFirma: string;
+  urlPdf: string;
+  createdAt: string;
+}
+
+const SHEET = 'EPP';
+const HEADERS = [
+  'id', 'numero', 'empresa', 'trabajador', 'fecha',
+  'items', 'entregadoPor', 'estado', 'firma', 'fechaFirma', 'urlPdf', 'createdAt',
+];
 
 @Injectable()
 export class EppService {
   constructor(
-    @InjectModel(Epp.name) private eppModel: Model<EppDocument>,
+    private sheets: GoogleSheetsService,
     private pdfService: EppPdfService,
     private usersService: UsersService,
-    private sheetsService: GoogleSheetsService,
   ) {}
 
-  async create(dto: CreateEppDto, usuarioId: string): Promise<Epp> {
+  private parse(row: Record<string, string>): EppEntity {
+    return {
+      ...row,
+      numero: Number(row.numero) || 0,
+      trabajador: this.tryParse(row.trabajador, {}),
+      items: this.tryParse(row.items, []),
+      entregadoPor: this.tryParse(row.entregadoPor, {}),
+    } as unknown as EppEntity;
+  }
+
+  private tryParse(val: string, fallback: any): any {
+    try { return JSON.parse(val); } catch { return fallback; }
+  }
+
+  private serialize(e: EppEntity): Record<string, any> {
+    return {
+      ...e,
+      trabajador: JSON.stringify(e.trabajador),
+      items: JSON.stringify(e.items),
+      entregadoPor: JSON.stringify(e.entregadoPor),
+    };
+  }
+
+  private async getAll(): Promise<EppEntity[]> {
+    return (await this.sheets.dbGetAll(SHEET)).map(r => this.parse(r));
+  }
+
+  async create(dto: CreateEppDto, usuarioId: string): Promise<EppEntity> {
     const user = await this.usersService.findOne(usuarioId);
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    const all = await this.getAll();
+    const numero = all.length + 1;
 
-    const numero = (await this.eppModel.countDocuments()) + 1;
-
-    const entregadoPor = {
-      nombre: `${user.name} ${user.lastName}`,
-      rut: user.rut,
-      rol: user.rol,
+    const entregadoPor = { nombre: `${user.name} ${user.lastName}`, rut: user.rut, rol: user.rol };
+    const epp: EppEntity = {
+      id: this.sheets.generateId(),
+      numero,
+      empresa: user.empresa,
+      trabajador: dto.trabajador as any,
+      fecha: dto.fecha,
+      items: (dto.items ?? []) as any,
+      entregadoPor,
+      estado: 'pendiente',
+      firma: '',
+      fechaFirma: '',
+      urlPdf: '',
+      createdAt: new Date().toISOString(),
     };
 
-    const epp = new this.eppModel({ ...dto, numero, empresa: user.empresa, entregadoPor });
-    const saved = await epp.save();
+    await this.sheets.dbAppend(SHEET, HEADERS, this.serialize(epp));
 
+    // Generar PDF en segundo plano
+    this.generarYGuardarPdf(epp).catch(() => null);
+
+    return epp;
+  }
+
+  private async generarYGuardarPdf(epp: EppEntity): Promise<void> {
     const url = await this.pdfService.generateEppPdf(
-      this.buildDatos(saved.toObject()),
-      entregadoPor.nombre,
-      this.buildFileName(saved.toObject()),
+      this.buildDatos(epp),
+      epp.entregadoPor?.nombre ?? '',
+      this.buildFileName(epp),
     );
-    saved.urlPdf = url;
-    await saved.save();
-    const obj = saved.toObject() as any;
-    this.sheetsService.agregarEpp({
-      fecha: String(obj.fecha ?? ''), numero: String(obj.numero ?? ''),
-      trabajador: obj.trabajador?.nombre ?? '', rut: obj.trabajador?.rut ?? '',
-      cargo: obj.trabajador?.cargo ?? '', empresa: obj.empresa ?? '',
-      estado: obj.estado ?? 'pendiente', urlPdf: url,
-    }).catch(() => null);
-    return saved;
+    const updated: EppEntity = { ...epp, urlPdf: url };
+    await this.sheets.dbUpdate(SHEET, epp.id, HEADERS, this.serialize(updated));
   }
 
-  async findAll(): Promise<Epp[]> {
-    return this.eppModel.find().sort({ createdAt: -1 }).exec();
+  async findAll(): Promise<EppEntity[]> {
+    return (await this.getAll()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
   }
 
-  async findOne(id: string): Promise<Epp> {
-    const epp = await this.eppModel.findById(id).exec();
+  async findOne(id: string): Promise<EppEntity> {
+    const all = await this.getAll();
+    const epp = all.find(e => e.id === id);
     if (!epp) throw new NotFoundException('EPP no encontrado');
     return epp;
   }
 
-  async findMisPendientes(usuarioId: string): Promise<Epp[]> {
-    return this.eppModel
-      .find({ 'trabajador.usuarioId': usuarioId, estado: 'pendiente' })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findMisPendientes(usuarioId: string): Promise<EppEntity[]> {
+    const all = await this.getAll();
+    return all
+      .filter(e => e.trabajador?.usuarioId === usuarioId && e.estado === 'pendiente')
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
   }
 
-  async firmar(id: string, usuarioId: string): Promise<Epp> {
-    const epp = await this.eppModel.findById(id).exec();
-    if (!epp) throw new NotFoundException('EPP no encontrado');
+  async firmar(id: string, usuarioId: string): Promise<EppEntity> {
+    const epp = await this.findOne(id);
     if (epp.estado === 'firmado') throw new ForbiddenException('Este EPP ya fue firmado');
 
     const user = await this.usersService.findOne(usuarioId);
-    if (!user) throw new NotFoundException('Usuario no encontrado');
     if (!user.signature) throw new ForbiddenException('El usuario no tiene firma guardada');
 
-    epp.firma = user.signature;
-    epp.estado = 'firmado';
-    epp.fechaFirma = new Date();
+    const updated: EppEntity = {
+      ...epp,
+      firma: user.signature,
+      estado: 'firmado',
+      fechaFirma: new Date().toISOString(),
+    };
 
-    const eppObj = epp.toObject() as any;
     const url = await this.pdfService.generateEppPdf(
-      this.buildDatos(eppObj),
-      eppObj.entregadoPor?.nombre ?? 'USUARIO',
-      this.buildFileName(eppObj),
+      this.buildDatos(updated),
+      updated.entregadoPor?.nombre ?? 'USUARIO',
+      this.buildFileName(updated),
     );
-    epp.urlPdf = url;
-    return epp.save();
+    updated.urlPdf = url;
+
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, this.serialize(updated));
+    return updated;
   }
 
-  async regenerarPdf(id: string): Promise<Epp> {
-    const epp = await this.eppModel.findById(id).exec();
-    if (!epp) throw new NotFoundException('EPP no encontrado');
-    const eppObj = epp.toObject() as any;
+  async regenerarPdf(id: string): Promise<EppEntity> {
+    const epp = await this.findOne(id);
     const url = await this.pdfService.generateEppPdf(
-      this.buildDatos(eppObj),
-      eppObj.entregadoPor?.nombre ?? 'USUARIO',
-      this.buildFileName(eppObj),
+      this.buildDatos(epp),
+      epp.entregadoPor?.nombre ?? 'USUARIO',
+      this.buildFileName(epp),
     );
-    epp.urlPdf = url;
-    return epp.save();
+    const updated: EppEntity = { ...epp, urlPdf: url };
+    await this.sheets.dbUpdate(SHEET, id, HEADERS, this.serialize(updated));
+    return updated;
   }
 
   async remove(id: string): Promise<{ message: string }> {
-    const result = await this.eppModel.findByIdAndDelete(id).exec();
-    if (!result) throw new NotFoundException('EPP no encontrado');
+    await this.findOne(id);
+    await this.sheets.dbDelete(SHEET, id);
     return { message: 'EPP eliminado correctamente' };
   }
 
   // ── Helpers ──────────────────────────────────────────────────
 
-  private buildDatos(epp: any): any {
+  private buildDatos(epp: EppEntity): any {
     return {
       empresa:        epp.empresa,
       nombre:         epp.trabajador?.nombre ?? '',
@@ -117,7 +170,7 @@ export class EppService {
       cargo:          epp.trabajador?.cargo ?? '',
       rut:            epp.trabajador?.rut ?? '',
       fecha:          epp.fecha ?? '',
-      firma:          epp.firma ?? null,
+      firma:          epp.firma || null,
       elementos:      (epp.items ?? []).map((item: any) => ({
         epp:      item.epp ?? '',
         marca:    item.marca ?? '',
@@ -132,7 +185,7 @@ export class EppService {
     };
   }
 
-  private buildFileName(epp: any): string {
+  private buildFileName(epp: EppEntity): string {
     const nombre = (epp.trabajador?.nombre ?? 'Trabajador')
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '-')
