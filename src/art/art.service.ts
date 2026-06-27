@@ -81,6 +81,8 @@ export class ArtService {
 
     const otrosRiesgos = (dto.otrosRiesgos ?? []).map(({ riesgo, medidaControl }) => ({ riesgo, medidaControl }));
     const participantes = (dto.participantes ?? []).map(({ nombre, cargo, enCondiciones, firma }) => ({ nombre, cargo, enCondiciones, firma }));
+    // Para Sheets: sin firmas base64 (evitar límite 50k chars por celda)
+    const participantesSheets = participantes.map(({ nombre, cargo, enCondiciones }) => ({ nombre, cargo, enCondiciones }));
 
     const art: ArtEntity = {
       id: this.sheets.generateId(),
@@ -91,7 +93,7 @@ export class ArtService {
       trabajoARealizar: dto.trabajoARealizar ?? '',
       lugarEspecifico: dto.lugarEspecifico ?? '',
       liderNombre: dto.liderNombre ?? '',
-      data: JSON.stringify({ ...dto, otrosRiesgos, participantes }),
+      data: JSON.stringify({ ...dto, otrosRiesgos, participantes: participantesSheets }),
       urlPdf: '',
       numeroDia,
       createdAt: new Date().toISOString(),
@@ -100,7 +102,7 @@ export class ArtService {
     await this.sheets.dbAppend(SHEET, HEADERS, this.serialize(art));
 
     try {
-      await this.generarYGuardarPdf(art, userId);
+      await this.generarYGuardarPdf(art, userId, participantes);
       const updated = await this.getById(art.id);
       return this.expand(updated);
     } catch {
@@ -108,11 +110,12 @@ export class ArtService {
     }
   }
 
-  private async generarYGuardarPdf(art: ArtEntity, userId: string): Promise<void> {
+  private async generarYGuardarPdf(art: ArtEntity, userId: string, participantesConFirmas?: any[]): Promise<void> {
     const usuario = await this.usersService.findOne(userId).catch(() => null);
     if (!usuario) return;
     const userName = `${usuario.name} ${usuario.lastName}`;
     const expanded = this.expand(art);
+    if (participantesConFirmas) expanded.participantes = participantesConFirmas;
     const urlPdf = await this.pdfService.generateArtPdf(expanded, userName);
     const updated: ArtEntity = { ...art, urlPdf };
     await this.sheets.dbUpdate(SHEET, art.id, HEADERS, this.serialize(updated));
