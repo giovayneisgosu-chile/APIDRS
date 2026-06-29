@@ -14,6 +14,7 @@ import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 import { VehiculosModule } from './vehiculos/vehiculos.module';
 import { ChecklistModule } from './checklist/checklist.module';
 import { PlanificacionModule } from './planificacion/planificacion.module';
+import { InspeccionModule } from './inspeccion/inspeccion.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PlanificacionModule } from './planificacion/planificacion.module';
     VehiculosModule,
     ChecklistModule,
     PlanificacionModule,
+    InspeccionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
