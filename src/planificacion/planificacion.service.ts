@@ -50,32 +50,44 @@ export class PlanificacionService {
     private drive: GoogleDriveService,
   ) {}
 
+  private mapActividad(r: Record<string, string>): ActividadPlanificada {
+    return {
+      especialidad: r['ESPECIALIDAD'] ?? r['especialidad'] ?? '',
+      nPod: r['N° POD'] ?? r['nPod'] ?? '',
+      trisemanal: r['TRISEMANAL / COLCHÓN'] ?? r['trisemanal'] ?? '',
+      fecha: r['Fecha'] ?? r['fecha'] ?? '',
+      responsable: r['Responsable'] ?? r['responsable'] ?? '',
+      areaTrabajo: r['Área de trabajo'] ?? r['areaTrabajo'] ?? '',
+      descripcionItem: r['Descripción Ítem'] ?? r['descripcionItem'] ?? '',
+      unidad: r['Unidad'] ?? r['unidad'] ?? '',
+      cantidadProgramada: r['Cantidad Programada'] ?? r['cantidadProgramada'] ?? '',
+      cantidadProyectadaDia: r['Cantidad Proyectada Día'] ?? r['cantidadProyectadaDia'] ?? '',
+      restricciones: r['Restricciones'] ?? r['restricciones'] ?? '',
+    };
+  }
+
   async getActividades(especialidad: string, fecha?: string): Promise<ActividadPlanificada[]> {
     const rows = await this.sheets.dbGetAll(SHEET_PLAN);
-
     return rows
       .filter(r => {
         const matchEsp = (r['ESPECIALIDAD'] ?? r['especialidad'] ?? '').toUpperCase() === especialidad.toUpperCase();
         if (!matchEsp) return false;
-        if (fecha) {
-          const fechaFila = r['Fecha'] ?? r['fecha'] ?? '';
-          return fechaFila === fecha;
-        }
+        if (fecha) return (r['Fecha'] ?? r['fecha'] ?? '') === fecha;
         return true;
       })
-      .map(r => ({
-        especialidad: r['ESPECIALIDAD'] ?? r['especialidad'] ?? '',
-        nPod: r['N° POD'] ?? r['nPod'] ?? '',
-        trisemanal: r['TRISEMANAL / COLCHÓN'] ?? r['trisemanal'] ?? '',
-        fecha: r['Fecha'] ?? r['fecha'] ?? '',
-        responsable: r['Responsable'] ?? r['responsable'] ?? '',
-        areaTrabajo: r['Área de trabajo'] ?? r['areaTrabajo'] ?? '',
-        descripcionItem: r['Descripción Ítem'] ?? r['descripcionItem'] ?? '',
-        unidad: r['Unidad'] ?? r['unidad'] ?? '',
-        cantidadProgramada: r['Cantidad Programada'] ?? r['cantidadProgramada'] ?? '',
-        cantidadProyectadaDia: r['Cantidad Proyectada Día'] ?? r['cantidadProyectadaDia'] ?? '',
-        restricciones: r['Restricciones'] ?? r['restricciones'] ?? '',
-      }));
+      .map(r => this.mapActividad(r));
+  }
+
+  async getActividadesPorResponsable(responsable: string, fecha?: string): Promise<ActividadPlanificada[]> {
+    const rows = await this.sheets.dbGetAll(SHEET_PLAN);
+    return rows
+      .filter(r => {
+        const resp = (r['Responsable'] ?? r['responsable'] ?? '').trim().toLowerCase();
+        if (resp !== responsable.trim().toLowerCase()) return false;
+        if (fecha) return (r['Fecha'] ?? r['fecha'] ?? '') === fecha;
+        return true;
+      })
+      .map(r => this.mapActividad(r));
   }
 
   async registrarEjecucion(dto: RegistrarEjecucionDto): Promise<any> {

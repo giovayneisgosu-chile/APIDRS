@@ -15,6 +15,7 @@ import { VehiculosModule } from './vehiculos/vehiculos.module';
 import { ChecklistModule } from './checklist/checklist.module';
 import { PlanificacionModule } from './planificacion/planificacion.module';
 import { InspeccionModule } from './inspeccion/inspeccion.module';
+import { ReportePodModule } from './reporte-pod/reporte-pod.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { InspeccionModule } from './inspeccion/inspeccion.module';
     ChecklistModule,
     PlanificacionModule,
     InspeccionModule,
+    ReportePodModule,
   ],
   controllers: [AppController],
   providers: [AppService],
