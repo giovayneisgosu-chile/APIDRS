@@ -15,12 +15,12 @@ export class PlanificacionController {
     return this.service.getActividades(especialidad, fecha);
   }
 
-  @Get('actividades-responsable')
-  getActividadesPorResponsable(
-    @Query('responsable') responsable: string,
+  @Get('actividades-ito')
+  getActividadesPorIto(
+    @Query('ito') ito: string,
     @Query('fecha') fecha?: string,
   ) {
-    return this.service.getActividadesPorResponsable(responsable, fecha);
+    return this.service.getActividadesPorIto(ito, fecha);
   }
 
   @Post('ejecucion')

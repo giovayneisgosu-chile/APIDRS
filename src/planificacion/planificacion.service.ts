@@ -78,12 +78,12 @@ export class PlanificacionService {
       .map(r => this.mapActividad(r));
   }
 
-  async getActividadesPorResponsable(responsable: string, fecha?: string): Promise<ActividadPlanificada[]> {
+  async getActividadesPorIto(ito: string, fecha?: string): Promise<ActividadPlanificada[]> {
     const rows = await this.sheets.dbGetAll(SHEET_PLAN);
     return rows
       .filter(r => {
-        const resp = (r['Responsable'] ?? r['responsable'] ?? '').trim().toLowerCase();
-        if (resp !== responsable.trim().toLowerCase()) return false;
+        const itoFila = (r['ITO'] ?? r['ito'] ?? '').trim().toLowerCase();
+        if (itoFila !== ito.trim().toLowerCase()) return false;
         if (fecha) return (r['Fecha'] ?? r['fecha'] ?? '') === fecha;
         return true;
       })
