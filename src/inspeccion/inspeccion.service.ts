@@ -171,8 +171,8 @@ export class InspeccionService {
   }
 
   async getEstadoFlota(): Promise<{ patente: string; diasDesdeInspeccion: number | null; tieneNoOk: boolean; ultimaInspeccion: string | null; realizadoPor: string | null }[]> {
-    const all = await this.getAll();
-    const vehiculos = await this.sheets.dbGetAll('Vehiculos');
+    const all = await this.getAll().catch(() => [] as InspeccionEntity[]);
+    const vehiculos = await this.sheets.dbGetAll('Vehiculos').catch(() => []);
     const patentes = vehiculos.map(v => v.patente ?? '').filter(Boolean);
 
     return patentes.map(patente => {
